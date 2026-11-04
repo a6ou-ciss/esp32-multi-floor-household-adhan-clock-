@@ -1,0 +1,18 @@
+{
+  "mosque": "grande-mosquee-de-paris",
+  "search": null,
+  "base_url": "https://www.kimonolabs.dev",
+  "adhan_audio": "athan.mp3",
+  "fajr_audio": "fajr.mp3",
+  "volume": 70,
+  "grace_seconds": 90,
+  "audio_latency_ms": 250,
+  "player": "auto",
+  "audio_device": null,
+  "timezone": "Europe/Paris",
+  "cache_file": "prayer_cache.json",
+  "log_file": "adhan.log",
+  "log_level": "INFO",
+  "max_play_seconds": 600,
+  "days_ahead": 3
+}

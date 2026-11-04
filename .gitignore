@@ -1,0 +1,44 @@
+# --- PlatformIO / Arduino / ESP32 ---
+build/
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/
+*.elf
+*.bin
+*.map
+sdkconfig.old
+
+# --- Secrets and local config ---
+.env
+config.json
+secrets.h
+**/include/secrets.h
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# --- Runtime files ---
+prayer_cache.json
+prayer_cache.json.tmp
+*.log
+
+# --- Audio (bring your own; may be copyrighted) ---
+*.mp3
+*.wav
+
+# --- KiCad ---
+*-backups/
+*.kicad_prl
+fp-info-cache
+_autosave-*
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/

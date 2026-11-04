@@ -1,0 +1,131 @@
+# Audio files
+
+This folder is a **working area** for preparing your Adhan recordings. Audio files
+are git-ignored (`*.mp3`, `*.wav`) because recordings are often copyrighted. Only use
+recordings you have the right to use, and never commit them.
+
+## Which file goes where
+
+| Target | Files | Location |
+|---|---|---|
+| ESP32 speaker nodes | `adhan.mp3`, optional `fajr.mp3` | `firmware/node/data/` (uploaded to flash) |
+| Raspberry Pi player | `athan.mp3`, optional `fajr.mp3` | next to `raspberry_adhan_player.py`, or set `ADHAN_AUDIO` / `FAJR_AUDIO` |
+
+If `fajr.mp3` is missing, Fajr uses the regular Adhan file.
+
+## Requirements for the ESP32 nodes
+
+Nodes decode MP3 on the chip (libhelix) and play it from a LittleFS partition in flash,
+so the file has to be small and simple:
+
+- **Format:** MP3 (MPEG-1 or MPEG-2 Layer III). Not AAC, OGG or WAV.
+- **Channels:** mono. The MAX98357A amplifier is mono anyway, and it halves the size.
+- **Sample rate:** 44100 Hz (or 22050 Hz for smaller files at lower fidelity).
+- **Bitrate:** constant (CBR), 64 to 96 kbps.
+- **Tags and cover art:** stripped. Large ID3 tags and embedded images waste flash and can confuse decoders.
+- **Total size:** both files combined must fit the partition.
+
+### Size budget
+
+`size (MB) ≈ bitrate (kbps) × seconds ÷ 8 ÷ 1000`
+
+| Flash layout | Space for audio | Notes |
+|---|---|---|
+| 4 MB module, provided `partitions.csv` | about 2.4 MB, minus a little filesystem overhead | leave a safety margin |
+| 8 / 16 MB module, enlarged `spiffs` partition | 5 MB or more | edit `partitions.csv` first |
+
+Examples for a 3-minute recording:
+
+| Encoding | Approx. size |
+|---|---|
+| 128 kbps stereo | 2.9 MB (too big for the 4 MB layout) |
+| 96 kbps mono | 2.2 MB |
+| 64 kbps mono | 1.4 MB |
+| 64 kbps mono, two files (Adhan + Fajr) | 2.9 MB (needs the larger partition) |
+
+If you want both an Adhan and a separate Fajr file on a 4 MB module, keep each one
+under about 1.1 MB (for example 48 to 64 kbps mono, about 2 minutes), or use an 8 MB
+or 16 MB module.
+
+## Preparing a file with ffmpeg
+
+Install ffmpeg (`sudo apt install ffmpeg`, `brew install ffmpeg`, or from ffmpeg.org).
+
+**Basic conversion** (mono, 44.1 kHz, 64 kbps, tags and artwork removed):
+
+```bash
+ffmpeg -i source.mp3 -vn -map_metadata -1 -ac 1 -ar 44100 -b:a 64k adhan.mp3
+```
+
+**Smaller file** (22.05 kHz mono at 48 kbps):
+
+```bash
+ffmpeg -i source.mp3 -vn -map_metadata -1 -ac 1 -ar 22050 -b:a 48k adhan.mp3
+```
+
+**Trim to the first 2 minutes with a short fade-out:**
+
+```bash
+ffmpeg -i source.mp3 -t 120 -af "afade=t=out:st=117:d=3" \
+  -vn -map_metadata -1 -ac 1 -ar 44100 -b:a 64k adhan.mp3
+```
+
+**Even out the loudness** (so Adhan and Fajr files play at a similar level):
+
+```bash
+ffmpeg -i source.mp3 -af "loudnorm=I=-16:TP=-1.5:LRA=11" \
+  -vn -map_metadata -1 -ac 1 -ar 44100 -b:a 64k adhan.mp3
+```
+
+**Remove leading silence** so the sound starts right at the file's beginning:
+
+```bash
+ffmpeg -i source.mp3 -af "silenceremove=start_periods=1:start_threshold=-50dB" \
+  -vn -map_metadata -1 -ac 1 -ar 44100 -b:a 64k adhan.mp3
+```
+
+Leading silence counts toward the delay you measure during latency calibration, so
+trim it first and calibrate with the final file.
+
+## Checking the result
+
+```bash
+ffprobe -hide_banner adhan.mp3         # confirm: mp3, mono, 44100 Hz, 64 kb/s
+ls -l adhan.mp3 fajr.mp3               # check the total against your partition
+```
+
+Listen to it once on your computer before flashing, so you know any problems are in
+the hardware rather than the file.
+
+## Installing the files
+
+**ESP32 nodes** (from `firmware/node`):
+
+```bash
+cp ../../audio/adhan.mp3 data/
+cp ../../audio/fajr.mp3 data/          # optional
+pio run -t uploadfs                    # writes data/ to the node's flash
+```
+
+Run `uploadfs` again only when the audio changes. Every node needs its own upload, and
+audio can only be updated over USB in this design.
+
+**Raspberry Pi:** copy `athan.mp3` (and optionally `fajr.mp3`) next to the script, then check it:
+
+```bash
+python3 raspberry_adhan_player.py --test-audio --volume 60
+```
+
+The Pi has no size limit to speak of and accepts any format `mpg123` or `ffplay` can
+play, so use a higher-quality file there if you like.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| `uploadfs` fails or says the image is too large | Files exceed the partition. Lower the bitrate, trim the file, or enlarge `spiffs` in `partitions.csv`. |
+| Node boots but is silent | File name doesn't match `ADHAN_FILE` / `FAJR_FILE` in `secrets.h`, or `uploadfs` wasn't run. Names are case-sensitive and start with `/`. |
+| Garbled or chipmunk audio | Sample rate or channel mismatch. Re-encode as mono at 44100 Hz (or 22050 Hz) CBR. |
+| Pops or clicks at the start | Add a short fade-in (`afade=t=in:d=0.3`) or leave a few milliseconds of lead-in. |
+| Too quiet or distorted | Adjust `DEFAULT_VOLUME` and the amp's GAIN pin first, and don't push `loudnorm` past -14 LUFS. |
+| Two floors sound out of step | That's `NODE_OFFSET_MS`, not the audio. See "Latency calibration" in the main README. |

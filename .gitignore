@@ -29,6 +29,7 @@ prayer_cache.json.tmp
 *.log
 
 # --- Audio (bring your own; may be copyrighted) ---
+# Covers firmware/node/data/*.mp3 and the Pi's local files
 *.mp3
 *.wav
 
